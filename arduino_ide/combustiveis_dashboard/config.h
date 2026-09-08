@@ -7,8 +7,8 @@
 
 // ---- Supabase (obrigatório) ----
 // Do teu projeto: Project Settings > API. Usa a chave *anon* (pública, só leitura).
-#define SUPABASE_URL   "https://XXXXXXXX.supabase.co"
-#define SUPABASE_ANON  "COLA_AQUI_A_CHAVE_ANON"
+#define SUPABASE_URL   "https://kpgrqgdkyueffdxvlfzf.supabase.co"
+#define SUPABASE_ANON  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtwZ3JxZ2RreXVlZmZkeHZsZnpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MTgzNTgsImV4cCI6MjEwNDM5NDM1OH0.UmsVVJqhasDyV9UAScs-yX0-RJ5Rb6hOBTiZP5LKT44"
 
 // ---- Localização inicial (podes mudar no ecrã) ----
 // Distritos: 1 Aveiro, 2 Beja, 3 Braga, 4 Bragança, 5 Castelo Branco,

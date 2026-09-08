@@ -50,7 +50,7 @@ XPT2046_Touchscreen ts(TOUCH_CS, TOUCH_IRQ);
 
 // ------------------------------ Estado --------------------------------------
 struct Precos   { float g1 = NAN, g2 = NAN; bool ok = false; } atual;
-struct Previsao { float g1 = NAN, g2 = NAN; bool online = false; } prev;
+struct Previsao { float g1 = NAN, g2 = NAN; bool online = false; bool futura = false; } prev;
 
 float serie1[HIST_MAX]; int serieN1 = 0;   // histórico do combustível 1 (mais antigo->recente)
 float serie2[HIST_MAX]; int serieN2 = 0;
@@ -72,6 +72,12 @@ static String dataHojePT() {
   char b[16];
   snprintf(b, sizeof(b), "%02d/%02d/%04d", t.tm_mday, t.tm_mon + 1, t.tm_year + 1900);
   return String(b);
+}
+
+static int dataHojeInt() {          // AAAAMMDD, para comparar datas
+  time_t now = time(nullptr);
+  struct tm t; localtime_r(&now, &t);
+  return (t.tm_year + 1900) * 10000 + (t.tm_mon + 1) * 100 + t.tm_mday;
 }
 
 static const char* nomeDistrito(int id) {
@@ -126,16 +132,23 @@ static int carregarSerie(int comb, float* dest, int maxN) {
 }
 
 static void carregarPrevisao() {
+  prev.online = false; prev.futura = false;
   String body;
-  if (!supaGet("previsao?select=gasolina,gasoleo&limit=1", body)) { prev.online = false; return; }
+  if (!supaGet("previsao?select=gasolina,gasoleo,desde&limit=1", body)) return;
   JsonDocument doc;
-  if (deserializeJson(doc, body)) { prev.online = false; return; }
+  if (deserializeJson(doc, body)) return;
   JsonArray arr = doc.as<JsonArray>();
-  if (arr.size() == 0) { prev.online = false; return; }
+  if (arr.size() == 0) return;
   JsonObject o = arr[0];
   prev.g1 = o["gasolina"].isNull() ? NAN : o["gasolina"].as<float>();
   prev.g2 = o["gasoleo"].isNull()  ? NAN : o["gasoleo"].as<float>();
   prev.online = true;
+  // A previsão só se soma se a 2a-feira a que se aplica ainda for no futuro.
+  const char* desde = o["desde"] | "";
+  if (strlen(desde) >= 10) {
+    int di = atoi(desde) * 10000 + atoi(desde + 5) * 100 + atoi(desde + 8);
+    prev.futura = di > dataHojeInt();
+  }
 }
 
 // Atualiza tudo a partir do Supabase (histórico + preço atual + previsão).
@@ -317,7 +330,8 @@ static void painelGrafico() {
 // ---------------------------------------------------------------------------
 //  Painel 3 — Variação prevista
 // ---------------------------------------------------------------------------
-static void cartaoPrevisao(int y, uint16_t cor, const char* nome, float atualP, float delta) {
+static void cartaoPrevisao(int y, uint16_t cor, const char* nome,
+                           float atualP, float delta, bool futura) {
   tft.fillRoundRect(10, y, tft.width() - 20, 70, 8, COR_CARTAO);
   tft.fillRect(10, y, 6, 70, cor);
   tft.setTextSize(1);
@@ -330,7 +344,6 @@ static void cartaoPrevisao(int y, uint16_t cor, const char* nome, float atualP, 
     return;
   }
 
-  float proj = isnan(atualP) ? NAN : atualP + delta;
   int   cent = (int)roundf(delta * 100.0f);
   uint16_t c = cent > 0 ? COR_SOBE : (cent < 0 ? COR_DESCE : COR_SUAVE);
   const char* seta = cent > 0 ? "^" : (cent < 0 ? "v" : "=");
@@ -340,21 +353,29 @@ static void cartaoPrevisao(int y, uint16_t cor, const char* nome, float atualP, 
   tft.setTextColor(c, COR_CARTAO);
   tft.drawString(b, 26, y + 30, 4);
 
-  if (!isnan(proj)) snprintf(b, sizeof(b), "~ %.3f EUR/L", proj);
-  else              strcpy(b, "~ -,--- EUR/L");
-  tft.setTextColor(COR_TEXTO, COR_CARTAO); tft.setTextDatum(MR_DATUM);
-  tft.drawString(b, tft.width() - 26, y + 44, 4);
+  tft.setTextDatum(MR_DATUM);
+  if (futura) {                                   // ainda não aconteceu -> projeta
+    float proj = isnan(atualP) ? NAN : atualP + delta;
+    if (!isnan(proj)) snprintf(b, sizeof(b), "~ %.3f EUR/L", proj);
+    else              strcpy(b, "~ -,--- EUR/L");
+    tft.setTextColor(COR_TEXTO, COR_CARTAO);
+    tft.drawString(b, tft.width() - 26, y + 44, 4);
+  } else {                                         // já aplicada -> não soma
+    tft.setTextColor(COR_SUAVE, COR_CARTAO);
+    tft.drawString("ja aplicada", tft.width() - 26, y + 46, 2);
+  }
   tft.setTextDatum(TL_DATUM);
 }
 
 static void painelPrevisao() {
   cabecalho("Variacao semanal");
-  cartaoPrevisao(34,  COR_G1, NOME_COMB_1, atual.g1, prev.g1);
-  cartaoPrevisao(112, COR_G2, NOME_COMB_2, atual.g2, prev.g2);
+  cartaoPrevisao(34,  COR_G1, NOME_COMB_1, atual.g1, prev.g1, prev.futura);
+  cartaoPrevisao(112, COR_G2, NOME_COMB_2, atual.g2, prev.g2, prev.futura);
   tft.setTextColor(COR_SUAVE, COR_FUNDO); tft.setTextDatum(MC_DATUM);
-  tft.drawString(prev.online ? "Alteracao prevista para 2a-feira"
-                             : "sem previsao disponivel",
-                 tft.width() / 2, 198, 2);
+  const char* sub = !prev.online ? "sem previsao disponivel"
+                    : (prev.futura ? "Alteracao prevista para 2a-feira"
+                                   : "Ja em vigor - aguarda nova previsao");
+  tft.drawString(sub, tft.width() / 2, 198, 2);
   tft.setTextDatum(TL_DATUM);
   pontosPainel();
 }

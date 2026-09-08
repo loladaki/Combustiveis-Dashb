@@ -14,12 +14,16 @@ create index if not exists idx_precos_lookup
   on public.precos (distrito, combustivel, data);
 
 -- Previsão semanal (linha única, id = 1). Variação em €/L.
+-- 'desde' = segunda-feira a que a previsão se aplica (para saber se já entrou em vigor).
 create table if not exists public.previsao (
   id         smallint primary key default 1,
   gasolina   real,
   gasoleo    real,
+  desde      date,
   atualizado timestamptz default now()
 );
+-- Se a tabela já existia sem a coluna:
+alter table public.previsao add column if not exists desde date;
 
 -- ---- Segurança (RLS): leitura pública, escrita só pela Edge Function ----
 alter table public.precos    enable row level security;

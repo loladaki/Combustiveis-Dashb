@@ -52,6 +52,25 @@ async function mediaPreco(distrito, comb) {
   }
 }
 
+// Segunda-feira a que a previsão se aplica. Calcula pelo FIM da semana - 6 dias
+// (o fim é sempre domingo e está no mês nomeado -> robusto a semanas entre meses).
+function segundaDaPrevisao(html) {
+  const meses = { janeiro: 0, fevereiro: 1, marco: 2, abril: 3, maio: 4, junho: 5,
+    julho: 6, agosto: 7, setembro: 8, outubro: 9, novembro: 10, dezembro: 11 };
+  const m = html.match(/semana de \d{1,2} a (\d{1,2})\s+(?:de\s+)?([A-Za-zçÇà-ÿ]+)/i);
+  if (!m) return null;
+  const endDay = parseInt(m[1]);
+  const mes = m[2].toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const mi = meses[mes];
+  if (mi === undefined) return null;
+  const now = new Date();
+  let end = new Date(Date.UTC(now.getUTCFullYear(), mi, endDay));
+  const diff = (end - now) / 864e5;
+  if (diff < -180) end = new Date(Date.UTC(now.getUTCFullYear() + 1, mi, endDay));
+  if (diff > 300)  end = new Date(Date.UTC(now.getUTCFullYear() - 1, mi, endDay));
+  return new Date(end.getTime() - 6 * 864e5).toISOString().slice(0, 10);
+}
+
 async function obterPrevisao() {
   try {
     const r = await fetch("https://precocombustiveis.pt/proxima-semana/", {
@@ -61,9 +80,9 @@ async function obterPrevisao() {
     const g = html.match(/gasolina 95 em cerca de[^(]*\(([+-]?\d+[.,]\d+)/i);
     const d = html.match(/leo simples em cerca de[^(]*\(([+-]?\d+[.,]\d+)/i);
     const num = (m) => (m ? parseFloat(m[1].replace(",", ".")) : null);
-    return { gasolina: num(g), gasoleo: num(d) };
+    return { gasolina: num(g), gasoleo: num(d), desde: segundaDaPrevisao(html) };
   } catch {
-    return { gasolina: null, gasoleo: null };
+    return { gasolina: null, gasoleo: null, desde: null };
   }
 }
 
@@ -107,7 +126,7 @@ async function main() {
   console.log(`\n[precos] ${rows.length} linhas para ${hoje}`);
 
   const pv = await obterPrevisao();
-  console.log(`[previsao] gasolina=${pv.gasolina} gasoleo=${pv.gasoleo}`);
+  console.log(`[previsao] gasolina=${pv.gasolina} gasoleo=${pv.gasoleo} desde=${pv.desde}`);
 
   if (dry) {
     console.log(JSON.stringify(rows.slice(0, 4), null, 2), "...");
@@ -116,7 +135,7 @@ async function main() {
 
   if (rows.length) await upsert(URL, KEY, "precos", rows);
   await upsert(URL, KEY, "previsao", [{
-    id: 1, gasolina: pv.gasolina, gasoleo: pv.gasoleo,
+    id: 1, gasolina: pv.gasolina, gasoleo: pv.gasoleo, desde: pv.desde,
     atualizado: new Date().toISOString(),
   }]);
   console.log("[ok] gravado no Supabase.");
