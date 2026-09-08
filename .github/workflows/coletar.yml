@@ -1,0 +1,21 @@
+name: coletar-combustiveis
+
+# Recolhe os preços (18 distritos) + previsão e grava no Supabase.
+on:
+  schedule:
+    - cron: "10 7 * * *"      # todos os dias 07:10 UTC (~08:10 Lisboa no inverno)
+  workflow_dispatch:           # permite correr à mão no separador Actions
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Coletar e gravar
+        run: node scripts/coletar.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

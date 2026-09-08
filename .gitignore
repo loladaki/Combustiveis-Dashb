@@ -1,0 +1,11 @@
+# PlatformIO
+.pio/
+.vscode/
+# Node
+node_modules/
+# Supabase CLI
+supabase/.temp/
+supabase/.branches/
+# SO
+.DS_Store
+Thumbs.db
