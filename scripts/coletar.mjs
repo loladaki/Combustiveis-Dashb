@@ -17,11 +17,13 @@ const UA =
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Média dos preços de um distrito: TODOS os postos, só os atualizados nos
+// últimos 14 dias (como o maisgasolina). Se houver poucos recentes, usa todos.
 async function mediaPreco(distrito, comb) {
   const url =
     `https://precoscombustiveis.dgeg.gov.pt/api/PrecoComb/PesquisarPostos` +
     `?idsTiposComb=${comb}&idMarca=&idTipoPosto=&idDistrito=${distrito}` +
-    `&idsMunicipios=&qtdPorPagina=60&pagina=1`;
+    `&idsMunicipios=&qtdPorPagina=5000&pagina=1`;
   try {
     const r = await fetch(url, {
       headers: {
@@ -33,12 +35,18 @@ async function mediaPreco(distrito, comb) {
     if (!r.ok) return null;
     const j = await r.json();
     const arr = j?.resultado ?? [];
-    let soma = 0, n = 0;
+    const agora = Date.now(), LIM = 14 * 864e5;
+    const recentes = [], todos = [];
     for (const p of arr) {
       const v = parseFloat(String(p.Preco).replace(",", ".").replace(/[^0-9.]/g, ""));
-      if (!isNaN(v) && v > 0.3 && v < 4) { soma += v; n++; }
+      if (isNaN(v) || v <= 0.3 || v >= 4) continue;
+      todos.push(v);
+      const d = Date.parse(String(p.DataAtualizacao || "").replace(" ", "T"));
+      if (!isNaN(d) && agora - d <= LIM) recentes.push(v);
     }
-    return n ? soma / n : null;
+    const usar = recentes.length >= 5 ? recentes : todos;
+    if (!usar.length) return null;
+    return usar.reduce((a, b) => a + b, 0) / usar.length;
   } catch {
     return null;
   }
