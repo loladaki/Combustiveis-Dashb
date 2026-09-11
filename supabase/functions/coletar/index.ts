@@ -75,10 +75,11 @@ async function obterPrevisao(): Promise<
       headers: { "User-Agent": UA },
     });
     const html = await r.text();
-    const g = html.match(/gasolina 95 em cerca de[^(]*\(([+-]?\d+[.,]\d+)/i);
-    const d = html.match(/leo simples em cerca de[^(]*\(([+-]?\d+[.,]\d+)/i);
+    // Nota: descidas usam o sinal Unicode "−" (U+2212), não o hifen "-".
+    const g = html.match(/gasolina 95 em cerca de[^(]*\(([+\-−–]?\d+[.,]\d+)/i);
+    const d = html.match(/leo simples em cerca de[^(]*\(([+\-−–]?\d+[.,]\d+)/i);
     const num = (m: RegExpMatchArray | null) =>
-      m ? parseFloat(m[1].replace(",", ".")) : null;
+      m ? parseFloat(m[1].replace(",", ".").replace(/[−–]/, "-")) : null;
     return { gasolina: num(g), gasoleo: num(d), desde: segundaDaPrevisao(html) };
   } catch (_) {
     return { gasolina: null, gasoleo: null, desde: null };
