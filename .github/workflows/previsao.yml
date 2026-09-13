@@ -1,0 +1,24 @@
+name: previsao
+
+# Só a previsão (leve). Corre várias vezes ao dia porque a Cloudflare bloqueia
+# o IP do GitHub de forma intermitente — basta um run acertar num IP livre.
+# Nunca apaga a previsão anterior; só grava quando consegue ler.
+on:
+  schedule:
+    - cron: "5 */2 * * *"       # de 2 em 2 horas
+  workflow_dispatch:
+
+jobs:
+  previsao:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Recolher previsao
+        run: node scripts/coletar.mjs
+        env:
+          SO_PREVISAO: "1"
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

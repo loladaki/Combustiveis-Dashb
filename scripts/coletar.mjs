@@ -129,25 +129,29 @@ async function main() {
   const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const dry = !URL || !KEY;
   if (dry) console.log("[dry-run] sem SUPABASE_URL/KEY — só imprime, não grava.");
+  // Modo "só previsão": salta o loop dos preços (usado pelo workflow frequente).
+  const soPrev = process.env.SO_PREVISAO === "1";
 
   const hoje = new Date().toISOString().slice(0, 10); // AAAA-MM-DD (UTC)
   const rows = [];
-  for (const dist of DISTRITOS) {
-    for (const comb of COMBS) {
-      const m = await mediaPreco(dist, comb);
-      if (m !== null) {
-        rows.push({
-          data: hoje,
-          distrito: dist,
-          combustivel: comb,
-          preco: Math.round(m * 1000) / 1000,
-        });
+  if (!soPrev) {
+    for (const dist of DISTRITOS) {
+      for (const comb of COMBS) {
+        const m = await mediaPreco(dist, comb);
+        if (m !== null) {
+          rows.push({
+            data: hoje,
+            distrito: dist,
+            combustivel: comb,
+            preco: Math.round(m * 1000) / 1000,
+          });
+        }
+        await sleep(150);
       }
-      await sleep(150);
+      process.stdout.write(".");
     }
-    process.stdout.write(".");
+    console.log(`\n[precos] ${rows.length} linhas para ${hoje}`);
   }
-  console.log(`\n[precos] ${rows.length} linhas para ${hoje}`);
 
   const pv = await obterPrevisao();
   console.log(`[previsao] gasolina=${pv.gasolina} gasoleo=${pv.gasoleo} desde=${pv.desde}`);
