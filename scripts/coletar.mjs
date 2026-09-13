@@ -74,15 +74,25 @@ function segundaDaPrevisao(html) {
 async function obterPrevisao() {
   try {
     const r = await fetch("https://precocombustiveis.pt/proxima-semana/", {
-      headers: { "User-Agent": UA },
+      headers: {
+        "User-Agent": UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
+      },
     });
     const html = await r.text();
     // Nota: descidas usam o sinal Unicode "−" (U+2212), não o hifen "-".
     const g = html.match(/gasolina 95 em cerca de[^(]*\(([+\-−–]?\d+[.,]\d+)/i);
     const d = html.match(/leo simples em cerca de[^(]*\(([+\-−–]?\d+[.,]\d+)/i);
     const num = (m) => (m ? parseFloat(m[1].replace(",", ".").replace(/[−–]/, "-")) : null);
+    if (!g || !d) {
+      console.log(`[previsao] debug: status=${r.status} len=${html.length} ` +
+        `temSemana=${/semana de \d/i.test(html)} ` +
+        `bloqueio=${/just a moment|cloudflare|captcha|attention required|enable javascript/i.test(html)}`);
+    }
     return { gasolina: num(g), gasoleo: num(d), desde: segundaDaPrevisao(html) };
-  } catch {
+  } catch (e) {
+    console.log(`[previsao] excecao: ${e}`);
     return { gasolina: null, gasoleo: null, desde: null };
   }
 }
