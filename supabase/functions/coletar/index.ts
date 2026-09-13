@@ -81,15 +81,20 @@ function parsePrevisao(html: string): Prev {
 // site direto; se não vier nada, usa um reader proxy que faz o fetch por ele.
 async function obterPrevisao(): Promise<Prev> {
   const DIRETO = "https://precocombustiveis.pt/proxima-semana/";
-  for (const url of [DIRETO, "https://r.jina.ai/" + DIRETO]) {
+  const JINA = "https://r.jina.ai/" + DIRETO;
+  const KEY = Deno.env.get("JINA_KEY");
+  const tentativas: Array<{ url: string; key?: string }> = [];
+  if (KEY) tentativas.push({ url: JINA, key: KEY });
+  tentativas.push({ url: DIRETO }, { url: DIRETO }, { url: JINA });
+  for (const t of tentativas) {
     try {
-      const r = await fetch(url, {
-        headers: {
-          "User-Agent": UA,
-          "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
-          "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
-        },
-      });
+      const headers: Record<string, string> = {
+        "User-Agent": UA,
+        "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+        "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
+      };
+      if (t.key) headers["Authorization"] = "Bearer " + t.key;
+      const r = await fetch(t.url, { headers });
       const html = await r.text();
       const p = parsePrevisao(html);
       if (p.gasolina !== null || p.gasoleo !== null) return p;

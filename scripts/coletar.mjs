@@ -85,27 +85,36 @@ function parsePrevisao(html) {
 // a partir da infra dele.
 async function obterPrevisao() {
   const DIRETO = "https://precocombustiveis.pt/proxima-semana/";
-  // A Cloudflare bloqueia o IP do GitHub de forma intermitente -> tenta direto
-  // duas vezes e, por fim, um reader proxy.
-  const fontes = [DIRETO, DIRETO, "https://r.jina.ai/" + DIRETO];
-  for (let i = 0; i < fontes.length; i++) {
-    const url = fontes[i], via = url.includes("jina") ? "proxy" : "direto";
+  const JINA = "https://r.jina.ai/" + DIRETO;
+  const KEY = process.env.JINA_KEY;
+
+  // A Cloudflare bloqueia o IP do GitHub. Com JINA_KEY, o Jina faz o fetch pela
+  // infra dele (fiável). Sem chave, tenta o site direto e o Jina anónimo (ambos
+  // intermitentes a partir de datacenter).
+  const tentativas = [];
+  if (KEY) tentativas.push({ url: JINA, via: "jina+key", key: KEY });
+  tentativas.push({ url: DIRETO, via: "direto" });
+  tentativas.push({ url: DIRETO, via: "direto" });
+  tentativas.push({ url: JINA, via: "jina" });
+
+  for (let i = 0; i < tentativas.length; i++) {
+    const t = tentativas[i];
     try {
-      const r = await fetch(url, {
-        headers: {
-          "User-Agent": UA,
-          "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
-          "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
-        },
-      });
+      const headers = {
+        "User-Agent": UA,
+        "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+        "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
+      };
+      if (t.key) headers["Authorization"] = "Bearer " + t.key;
+      const r = await fetch(t.url, { headers });
       const html = await r.text();
       const p = parsePrevisao(html);
       if (p.gasolina !== null || p.gasoleo !== null) return p;
-      console.log(`[previsao] tentativa ${i + 1} (${via}) sem dados: status=${r.status} len=${html.length}`);
+      console.log(`[previsao] ${t.via} sem dados: status=${r.status} len=${html.length}`);
     } catch (e) {
-      console.log(`[previsao] tentativa ${i + 1} (${via}) erro: ${e}`);
+      console.log(`[previsao] ${t.via} erro: ${e}`);
     }
-    await sleep(1500);
+    await sleep(1200);
   }
   return { gasolina: null, gasoleo: null, desde: null };
 }

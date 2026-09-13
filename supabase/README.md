@@ -20,11 +20,33 @@ GitHub Actions (cron 1x/dia)  ──scrape DGEG + previsão──▶  Supabase (
    git push -u origin main
    ```
 4. No GitHub: **Settings → Secrets and variables → Actions → New repository secret**,
-   cria dois secrets (valores em Supabase → Project Settings → API):
+   cria os secrets (valores em Supabase → Project Settings → API):
    - `SUPABASE_URL` = `https://XXXXXXXX.supabase.co`
    - `SUPABASE_SERVICE_ROLE_KEY` = a **service_role** key (secreta!)
+   - `JINA_KEY` = chave grátis do Jina Reader (ver secção "Previsão fiável" abaixo)
 5. **Actions** → workflow *coletar-combustiveis* → **Run workflow** (corre já e
-   preenche o dia de hoje). A partir daí corre sozinho todos os dias.
+   preenche o dia de hoje). A partir daí corre sozinho todos os dias; um segundo
+   workflow (*previsao*) corre de 2 em 2 h só para a previsão.
+
+## Previsão fiável (contornar a Cloudflare)
+
+O site da previsão (precocombustiveis.pt) está atrás da Cloudflare, que **bloqueia
+os IPs de datacenter do GitHub** (403). Os preços (DGEG) não têm esse problema.
+
+Para a previsão ser fiável, usa-se o **Jina Reader**, que faz o fetch pela infra
+dele. Chave grátis (2 min, sem cartão):
+
+1. Vai a **https://jina.ai/reader**, faz login e copia a API key (`jina_...`).
+2. Cria o secret **`JINA_KEY`** no GitHub (como acima).
+
+Sem a chave o sistema ainda tenta o site direto e o Jina anónimo, mas só acerta
+de vez em quando (o IP do GitHub é bloqueado a maior parte das vezes).
+
+## Migração da tabela previsao (histórico semanal)
+
+Se criaste a tabela `previsao` numa versão anterior (linha única `id`), corre uma
+vez [`migracao_previsao.sql`](migracao_previsao.sql) para passar a **uma linha por
+semana** (chave `desde`) — assim guardas o histórico de subidas/descidas.
 
 ## Ligar o ESP32
 
