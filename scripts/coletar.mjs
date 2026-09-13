@@ -71,30 +71,40 @@ function segundaDaPrevisao(html) {
   return new Date(end.getTime() - 6 * 864e5).toISOString().slice(0, 10);
 }
 
+// Extrai os números da previsão do HTML/texto.
+// Nota: descidas usam o sinal Unicode "−" (U+2212), não o hifen "-".
+function parsePrevisao(html) {
+  const g = html.match(/gasolina 95 em cerca de[^(]*\(([+\-−–]?\d+[.,]\d+)/i);
+  const d = html.match(/leo simples em cerca de[^(]*\(([+\-−–]?\d+[.,]\d+)/i);
+  const num = (m) => (m ? parseFloat(m[1].replace(",", ".").replace(/[−–]/, "-")) : null);
+  return { gasolina: num(g), gasoleo: num(d), desde: segundaDaPrevisao(html) };
+}
+
+// O site está atrás de Cloudflare e bloqueia IPs de datacenter (403 no GitHub).
+// Tenta o site direto; se não vier nada, usa um reader proxy que faz o fetch
+// a partir da infra dele.
 async function obterPrevisao() {
-  try {
-    const r = await fetch("https://precocombustiveis.pt/proxima-semana/", {
-      headers: {
-        "User-Agent": UA,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
-      },
-    });
-    const html = await r.text();
-    // Nota: descidas usam o sinal Unicode "−" (U+2212), não o hifen "-".
-    const g = html.match(/gasolina 95 em cerca de[^(]*\(([+\-−–]?\d+[.,]\d+)/i);
-    const d = html.match(/leo simples em cerca de[^(]*\(([+\-−–]?\d+[.,]\d+)/i);
-    const num = (m) => (m ? parseFloat(m[1].replace(",", ".").replace(/[−–]/, "-")) : null);
-    if (!g || !d) {
-      console.log(`[previsao] debug: status=${r.status} len=${html.length} ` +
-        `temSemana=${/semana de \d/i.test(html)} ` +
-        `bloqueio=${/just a moment|cloudflare|captcha|attention required|enable javascript/i.test(html)}`);
+  const DIRETO = "https://precocombustiveis.pt/proxima-semana/";
+  const fontes = [DIRETO, "https://r.jina.ai/" + DIRETO];
+  for (const url of fontes) {
+    try {
+      const r = await fetch(url, {
+        headers: {
+          "User-Agent": UA,
+          "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+          "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
+        },
+      });
+      const html = await r.text();
+      const p = parsePrevisao(html);
+      if (p.gasolina !== null || p.gasoleo !== null) return p;
+      console.log(`[previsao] ${url.includes("jina") ? "proxy" : "direto"} ` +
+        `sem dados (status=${r.status} len=${html.length})`);
+    } catch (e) {
+      console.log(`[previsao] erro (${url.includes("jina") ? "proxy" : "direto"}): ${e}`);
     }
-    return { gasolina: num(g), gasoleo: num(d), desde: segundaDaPrevisao(html) };
-  } catch (e) {
-    console.log(`[previsao] excecao: ${e}`);
-    return { gasolina: null, gasoleo: null, desde: null };
   }
+  return { gasolina: null, gasoleo: null, desde: null };
 }
 
 async function upsert(url, key, tabela, linhas) {

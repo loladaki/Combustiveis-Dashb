@@ -66,24 +66,36 @@ function segundaDaPrevisao(html: string): string | null {
   return new Date(end.getTime() - 6 * 864e5).toISOString().slice(0, 10);
 }
 
-// Previsão da próxima semana (scraping de precocombustiveis.pt).
-async function obterPrevisao(): Promise<
-  { gasolina: number | null; gasoleo: number | null; desde: string | null }
-> {
-  try {
-    const r = await fetch("https://precocombustiveis.pt/proxima-semana/", {
-      headers: { "User-Agent": UA },
-    });
-    const html = await r.text();
-    // Nota: descidas usam o sinal Unicode "−" (U+2212), não o hifen "-".
-    const g = html.match(/gasolina 95 em cerca de[^(]*\(([+\-−–]?\d+[.,]\d+)/i);
-    const d = html.match(/leo simples em cerca de[^(]*\(([+\-−–]?\d+[.,]\d+)/i);
-    const num = (m: RegExpMatchArray | null) =>
-      m ? parseFloat(m[1].replace(",", ".").replace(/[−–]/, "-")) : null;
-    return { gasolina: num(g), gasoleo: num(d), desde: segundaDaPrevisao(html) };
-  } catch (_) {
-    return { gasolina: null, gasoleo: null, desde: null };
+type Prev = { gasolina: number | null; gasoleo: number | null; desde: string | null };
+
+// Nota: descidas usam o sinal Unicode "−" (U+2212), não o hifen "-".
+function parsePrevisao(html: string): Prev {
+  const g = html.match(/gasolina 95 em cerca de[^(]*\(([+\-−–]?\d+[.,]\d+)/i);
+  const d = html.match(/leo simples em cerca de[^(]*\(([+\-−–]?\d+[.,]\d+)/i);
+  const num = (m: RegExpMatchArray | null) =>
+    m ? parseFloat(m[1].replace(",", ".").replace(/[−–]/, "-")) : null;
+  return { gasolina: num(g), gasoleo: num(d), desde: segundaDaPrevisao(html) };
+}
+
+// O site está atrás de Cloudflare e bloqueia IPs de datacenter (403). Tenta o
+// site direto; se não vier nada, usa um reader proxy que faz o fetch por ele.
+async function obterPrevisao(): Promise<Prev> {
+  const DIRETO = "https://precocombustiveis.pt/proxima-semana/";
+  for (const url of [DIRETO, "https://r.jina.ai/" + DIRETO]) {
+    try {
+      const r = await fetch(url, {
+        headers: {
+          "User-Agent": UA,
+          "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+          "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8",
+        },
+      });
+      const html = await r.text();
+      const p = parsePrevisao(html);
+      if (p.gasolina !== null || p.gasoleo !== null) return p;
+    } catch (_) { /* tenta a próxima fonte */ }
   }
+  return { gasolina: null, gasoleo: null, desde: null };
 }
 
 Deno.serve(async () => {
