@@ -127,13 +127,14 @@ Deno.serve(async () => {
   }
 
   const pv = await obterPrevisao();
-  await supabase.from("previsao").upsert({
-    id: 1,
-    gasolina: pv.gasolina,
-    gasoleo: pv.gasoleo,
-    desde: pv.desde,
-    atualizado: new Date().toISOString(),
-  });
+  if (pv.desde && (pv.gasolina !== null || pv.gasoleo !== null)) {
+    await supabase.from("previsao").upsert({
+      desde: pv.desde,
+      gasolina: pv.gasolina,
+      gasoleo: pv.gasoleo,
+      atualizado: new Date().toISOString(),
+    });
+  }
 
   return new Response(
     JSON.stringify({ ok: true, inseridos: rows.length, previsao: pv }),

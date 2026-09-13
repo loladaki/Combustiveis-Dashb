@@ -85,8 +85,11 @@ function parsePrevisao(html) {
 // a partir da infra dele.
 async function obterPrevisao() {
   const DIRETO = "https://precocombustiveis.pt/proxima-semana/";
-  const fontes = [DIRETO, "https://r.jina.ai/" + DIRETO];
-  for (const url of fontes) {
+  // A Cloudflare bloqueia o IP do GitHub de forma intermitente -> tenta direto
+  // duas vezes e, por fim, um reader proxy.
+  const fontes = [DIRETO, DIRETO, "https://r.jina.ai/" + DIRETO];
+  for (let i = 0; i < fontes.length; i++) {
+    const url = fontes[i], via = url.includes("jina") ? "proxy" : "direto";
     try {
       const r = await fetch(url, {
         headers: {
@@ -98,11 +101,11 @@ async function obterPrevisao() {
       const html = await r.text();
       const p = parsePrevisao(html);
       if (p.gasolina !== null || p.gasoleo !== null) return p;
-      console.log(`[previsao] ${url.includes("jina") ? "proxy" : "direto"} ` +
-        `sem dados (status=${r.status} len=${html.length})`);
+      console.log(`[previsao] tentativa ${i + 1} (${via}) sem dados: status=${r.status} len=${html.length}`);
     } catch (e) {
-      console.log(`[previsao] erro (${url.includes("jina") ? "proxy" : "direto"}): ${e}`);
+      console.log(`[previsao] tentativa ${i + 1} (${via}) erro: ${e}`);
     }
+    await sleep(1500);
   }
   return { gasolina: null, gasoleo: null, desde: null };
 }
@@ -155,11 +158,18 @@ async function main() {
   }
 
   if (rows.length) await upsert(URL, KEY, "precos", rows);
-  await upsert(URL, KEY, "previsao", [{
-    id: 1, gasolina: pv.gasolina, gasoleo: pv.gasoleo, desde: pv.desde,
-    atualizado: new Date().toISOString(),
-  }]);
-  console.log("[ok] gravado no Supabase.");
+
+  // Só grava a previsão se a conseguimos ler (nunca apaga a anterior). Uma linha
+  // por semana ('desde' é a chave) -> fica o histórico de subidas/descidas.
+  if (pv.desde && (pv.gasolina !== null || pv.gasoleo !== null)) {
+    await upsert(URL, KEY, "previsao", [{
+      desde: pv.desde, gasolina: pv.gasolina, gasoleo: pv.gasoleo,
+      atualizado: new Date().toISOString(),
+    }]);
+    console.log("[ok] precos + previsao gravados.");
+  } else {
+    console.log("[ok] precos gravados; previsao mantida (nao foi possivel ler agora).");
+  }
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

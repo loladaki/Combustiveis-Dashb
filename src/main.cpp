@@ -131,10 +131,12 @@ static int carregarSerie(int comb, float* dest, int maxN) {
   return n;
 }
 
+// Previsão vem do Supabase (última semana disponível). 'desde' = 2a-feira a que
+// se aplica: só somamos a variação se essa 2a-feira ainda for no futuro.
 static void carregarPrevisao() {
-  prev.online = false; prev.futura = false;
+  prev.online = false; prev.futura = false; prev.g1 = NAN; prev.g2 = NAN;
   String body;
-  if (!supaGet("previsao?select=gasolina,gasoleo,desde&limit=1", body)) return;
+  if (!supaGet("previsao?select=gasolina,gasoleo,desde&order=desde.desc&limit=1", body)) return;
   JsonDocument doc;
   if (deserializeJson(doc, body)) return;
   JsonArray arr = doc.as<JsonArray>();
@@ -142,8 +144,7 @@ static void carregarPrevisao() {
   JsonObject o = arr[0];
   prev.g1 = o["gasolina"].isNull() ? NAN : o["gasolina"].as<float>();
   prev.g2 = o["gasoleo"].isNull()  ? NAN : o["gasoleo"].as<float>();
-  prev.online = true;
-  // A previsão só se soma se a 2a-feira a que se aplica ainda for no futuro.
+  prev.online = !isnan(prev.g1) || !isnan(prev.g2);
   const char* desde = o["desde"] | "";
   if (strlen(desde) >= 10) {
     int di = atoi(desde) * 10000 + atoi(desde + 5) * 100 + atoi(desde + 8);
