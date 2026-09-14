@@ -25,8 +25,7 @@ GitHub Actions (cron 1x/dia)  ──scrape DGEG + previsão──▶  Supabase (
    - `SUPABASE_SERVICE_ROLE_KEY` = a **service_role** key (secreta!)
    - `JINA_KEY` = chave grátis do Jina Reader (ver secção "Previsão fiável" abaixo)
 5. **Actions** → workflow *coletar-combustiveis* → **Run workflow** (corre já e
-   preenche o dia de hoje). A partir daí corre sozinho todos os dias; um segundo
-   workflow (*previsao*) corre de 2 em 2 h só para a previsão.
+   preenche o dia de hoje). A partir daí corre sozinho **1×/dia** (preços + previsão).
 
 ## Previsão fiável (contornar a Cloudflare)
 
